@@ -1,5 +1,10 @@
 /* global Form, Effects */
 
+// Version 1.2
+// - updated for Generator 2.0
+// Version 1.1
+// - Arduino code was wrong, it was never fading...
+// 
 // Every effect extends the Effect class.
 // This will give some base functionality
 class EffectFade extends Effect
@@ -24,7 +29,7 @@ class EffectFade extends Effect
   }
   
   static get Author() {return "Adriano Petrucci";}
-  static get Version() {return "1.0";}
+  static get Version() {return "1.2";}
   
     // Init class, parameters: number of leds (if you need to know how many leds the strip has)
   Init(leds)
@@ -44,33 +49,49 @@ class EffectFade extends Effect
         //   min value, 
         //   max value (negative to give the possibility to insert a bigger number manually)
         //   return function
-    this.animationSettings.push(Form.CreateSliderInput("Duration (ms):", this.options['duration'], 1000, 100, -1000, function(val){
-      if(val < this.delay) 
-        alert("Duration must be greater than the delay");
-      else
-      {
-        this.options['duration'] = val;
-        this.UpdateSteps();
+    this.animationSettings.push(
+      {type:'slider', title:'Duration (ms):', options:[100, 1000, -1000], value:()=>{return this.options['duration'];}, update:(val)=>{
+          if(val < this.delay) 
+            alert("Duration must be greater than the delay");
+          else
+          {
+            this.options['duration'] = val;
+            this.UpdateSteps();
+          }
+        }
       }
-    }.bind(this)));
-    this.animationSettings.push(Form.CreateSliderInput("Delay between steps (ms):", this.delay, 10, 1, -100, function(val){
-      if(val > this.options['duration']) 
-        alert("Delay must be smaller than the duration");
-      else
-      {
-        this.delay = val;
-        this.UpdateSteps();
+    );
+    this.animationSettings.push(
+      {type:'slider', title:'Delay between steps (ms):', options:[1, 10, -100], value:()=>{return this.delay;}, update:(val)=>{
+          if(val > this.options['duration']) 
+            alert("Delay must be smaller than the duration");
+          else
+          {
+            this.delay = val;
+            this.UpdateSteps();
+          }
+        }
       }
-    }.bind(this)));
-    this.animationSettings.push(Form.CreateSliderInput("Every (led):", this.options['every'], 1, 1, leds, function(val){
-      this.options['every'] = val;
-      this.UpdateSteps();
-    }.bind(this)));
-
+    );
+    this.animationSettings.push(
+      {type:'slider', title:'Every (led):', options:[1, 1, leds], value:()=>{return this.options['every'];}, update:(val)=>{
+          this.options['every'] = val;
+          this.UpdateSteps();
+        }
+      }
+    );
+    
       // fill colors array, only 2 for start and end color
-    this.colorSettings.push(Form.CreateColorInput("Begin Color :", this.colors[0].red, this.colors[0].green, this.colors[0].blue, this.CreateFunc(0, this)));
-    this.colorSettings.push(Form.CreateColorInput("End Color :", this.colors[1].red, this.colors[1].green, this.colors[1].blue, this.CreateFunc(1, this)));
-
+    this.colorSettings.push(
+      {
+        type:'color', title:'Begin Color:', color:()=>{return new Pixel(this.colors[0].red, this.colors[0].green, this.colors[0].blue, this.colors[0].white);}, update:this.CreateFunc(0, this)
+      }
+    );
+    this.colorSettings.push(
+      {
+        type:'color', title:'End Color:', color:()=>{return new Pixel(this.colors[1].red, this.colors[1].green, this.colors[1].blue, this.colors[1].white);}, update:this.CreateFunc(1, this)
+      }
+    );
     super.Init(leds);
   }
 
@@ -133,12 +154,12 @@ class EffectFade extends Effect
     code += "  uint8_t r,g,b;\n";
     code += "  double e;\n";
     code += "  e = (" + s + ".effStep * " + this.delay + ") / " + this.options['duration'] + ";\n";
-    code += "  r = " + this.colors[1].red + " * ( e ) + " + this.colors[0].red + " * ( 1.0 - e );\n";
-    code += "  g = " + this.colors[1].green + " * ( e ) + " + this.colors[0].green + " * ( 1.0 - e );\n";
-    code += "  b = " + this.colors[1].blue + " * ( e ) + " + this.colors[0].blue + " * ( 1.0 - e );\n";
+    code += "  r = ( e ) * " + this.colors[1].red + " + " + this.colors[0].red + " * ( 1.0 - e );\n";
+    code += "  g = ( e ) * " + this.colors[1].green + " + " + this.colors[0].green + " * ( 1.0 - e );\n";
+    code += "  b = ( e ) * " + this.colors[1].blue + " + " + this.colors[0].blue + " * ( 1.0 - e );\n";
     code += "  for(uint16_t j=0;j<" + leds + ";j++) {\n";
     code += "    if((j % " + this.options['every'] + ") == 0)\n";
-    code += "      " + s + ".strip.setPixelColor(j, " + this.colors[0].red + ", " + this.colors[0].green + ", " + this.colors[0].blue + ");\n";
+    code += "      " + s + ".strip.setPixelColor(j, r, g, b);\n";
     code += "    else\n";
     code += "      " + s + ".strip.setPixelColor(j, 0, 0, 0);\n";
     code += "  }\n";

@@ -18,6 +18,9 @@ var LedStrips = new class
     this.selected = null;
     this.currentUsed = 0;
     this.maxCurrent = 0;
+    this.ram = 0;
+    this.flash = 0;
+    this.pinBF = [];
   }
   
   Count()
@@ -37,75 +40,72 @@ var LedStrips = new class
   
   AddLedStrip()
   {
-    var ledStrip = new LedStrip(8 + this.Count(), 60);
+
+    if (this.pinBF.length > 0) {
+      var ledStrip = new LedStrip(this.pinBF[0], 60);
+      this.pinBF.shift();
+    }else{
+      var ledStrip = new LedStrip(8 + this.Count(), 60);
+    }
+    
     this.ledstrips.push(ledStrip);
     this.strips++;
     this.SelectStrip(ledStrip);
-    //ledStrip.ShowOptions();
     return ledStrip;
   }
   
   SelectStrip(ledStrip)
   {
+    var ledeffectsdiv = document.getElementById('ledeffectsdiv');
     for(var s=0;s<this.Count();s++)
     {
-      this.ledstrips[s].div.style.borderColor = "#000000";
+      this.ledstrips[s].div.id = 'ledstrip';      
     }
-    ledStrip.div.style.borderColor = "#303060";
     
-    if(this.selected === ledStrip)
-    {
-      
-    }
-    else
+    if(this.selected !== ledStrip)
     {
       this.selected = ledStrip;
     }
-    
-    while(document.getElementById("ledeffectsdiv").childNodes.length > 2)
+
+    while(ledeffectsdiv.childNodes.length > 0)
     {
-      document.getElementById("ledeffectsdiv").removeChild(
-              document.getElementById("ledeffectsdiv").childNodes[document.getElementById("ledeffectsdiv").childNodes.length - 1]
-              );
+      ledeffectsdiv.removeChild(ledeffectsdiv.firstChild);
     }
-    document.getElementById("ledeffectsdiv").appendChild(
-              ledStrip.loop.div
-              );    
+    ledeffectsdiv.appendChild(ledStrip.loop.div);  
   }
   
   Loop()
   {
     this.currentUsed = 0;
+    this.ram = 56; // base variables
     for(var s=0;s<this.Count();s++)
     {
       this.ledstrips[s].Loop();
       this.currentUsed += this.ledstrips[s].current;
+      this.ram += this.ledstrips[s].ram;
     }
     if(this.currentUsed > this.maxCurrent) this.maxCurrent = this.currentUsed;
-    document.getElementById('info_current').innerHTML = (parseInt(this.currentUsed / 10) / 100) + "A (max:" + (parseInt(this.maxCurrent / 100) / 10) + "A)";
+    document.getElementById('info_current').innerHTML = (parseInt(this.currentUsed / 10) / 100) + "A (max: " + (parseInt(this.maxCurrent / 100) / 10) + "A)";
+    document.getElementById('info_ram').innerHTML = parseInt(this.ram) + " bytes";
   }
   
   Remove(ledStrip)
   {
-    while(document.getElementById("ledeffectsdiv").childNodes.length > 4)
-    {
-      document.getElementById("ledeffectsdiv").removeChild(
-              document.getElementById("ledeffectsdiv").childNodes[document.getElementById("ledeffectsdiv").childNodes.length - 1]
-              );
-    }
-    
+    var ledstripsdiv = document.getElementById('ledstripsdiv');
     for(var s=0;s<this.Count();s++)
     {
       if(this.ledstrips[s] === ledStrip)
       {
-        document.getElementById("ledstripsdiv").removeChild(this.ledstrips[s].div);
+        
+        ledstripsdiv.removeChild(this.ledstrips[s].div);
+        
         this.ledstrips.splice(s, 1);
         this.strips--;
         break;
       }
     }
+    this.pinBF.push(ledStrip.pin);
   }
-  
 };
 
 class LedStrip
@@ -116,32 +116,60 @@ class LedStrip
     this.loop = new Loop(this);
     this.leds = [];
     this.current = 0;
+    this.ram = 0;
+    this.flash = 0;
+    this.frequence = 800;
+    this.colortype = "NEO_GRB";
     this.div = document.createElement("div");
     this.div.className = "ledstrip";
+    this.div.title = 'Double click to open settings';
+
+    this.div.setAttribute('onclick', 'change(this)');
+
+    this.calculateLeds = function (div) {
+      if (window.innerWidth < 400) {
+        var dimension = (leds<27) ? 8 : 400 / leds;
+        div.style.width = dimension+"vw";
+        div.style.height = dimension+"vw";
+      }else if (window.innerWidth > 401 && window.innerWidth < 700) {
+        var dimension = (leds<27) ? 5 : 200 / leds;
+        div.style.width = dimension+"vw";
+        div.style.height = dimension+"vw";
+      }else {
+        var dimension = (leds<27) ? 3 : 76 / leds;
+        div.style.width = dimension+"vw";
+        div.style.height = dimension+"vw";
+      }
+    }
+
     for(var j=0;j<leds;j++)
     {
       this.leds.push(new Pixel(0,0,0));
-
-      var dimension = 98 / leds;
-      if(leds < 30) dimension = 3;
       var pixel = document.createElement("div");
       pixel.className = "pixelled";
-      pixel.setAttribute("style", "width:"+dimension+"vw;height:"+dimension+"vw;");
+      this.calculateLeds(pixel);
       this.div.appendChild(pixel);
     }
+    
     this.div.addEventListener("click", function(){
-      this.ShowOptions();
+      this.ShowOptions(this.pin);
     }.bind(this));
+
+    LedStrips.SelectStrip(this);
+
   }
-  
-  ShowOptions()
+
+  ShowOptions(pin)
   {
+    
     if(LedStrips.selected !== this)
     {
       LedStrips.SelectStrip(this);
       return;
     }
+
     var inputs = [];
+
     inputs.push(Form.CreateNumberInput("Leds quantity:", this.leds.length, 1, 500, function(val){
       var leds = this.leds.length;
       while(val < leds)
@@ -155,16 +183,12 @@ class LedStrip
         this.leds.push(new Pixel(0,0,0));
         var pixel = document.createElement("div");
         pixel.className = "pixelled";
-        pixel.setAttribute("style", "width:1vw;height:1vw;");
         this.div.appendChild(pixel);
         leds = this.leds.length;
       }
       for(var j=0;j<leds;j++)
       {
-        var dimension = 98 / leds;
-        if(leds < 30) dimension = 3;
-        this.div.childNodes[j].style.width = dimension+"vw";
-        this.div.childNodes[j].style.height = dimension+"vw";
+        this.calculateLeds(this.div.childNodes[j]);
       }
     }.bind(this)));
 
@@ -183,22 +207,36 @@ class LedStrip
         this.pin = parseInt(val);
       }
     }.bind(this)));
+    
+    inputs.push(Form.CreateSelectionInput("Strip frequence (kHz):", this.frequence, [400,800], function(val){
+      this.frequence = val;
+    }.bind(this)));
+    
+    inputs.push(Form.CreateSelectionInput("Strip type (default 'Neo NEO_GRB'):", this.colortype, ["NEO_RGB","NEO_RBG","NEO_GRB","NEO_GBR","NEO_BRG","NEO_BGR","NEO_WRGB","NEO_WRBG","NEO_WGRB","NEO_WGBR","NEO_WBRG","NEO_WBGR"], function(val){
+      this.colortype = val;
+    }.bind(this)));
 
     inputs.push(Form.CreateCloseButton("Remove Strip", function(){
       LedStrips.Remove(this);
     }.bind(this)));
-    Form.GetInputs("Strip settings", inputs);
+
+    Form.GetInputs(inputs, pin);
   }
   
   GetDiv()
   {
     return this.div;
   }
-  
+
+  SetPin(pin){
+    this.pin = pin;
+  }
+
   Show()
   {
     var r,g,b,a,r1,g1,b1,norm;
     this.current = 0;
+    this.ram = this.leds.length * 3;
     for(var j=0;j<this.leds.length;j++)
     {
       r = this.leds[j].red;
@@ -236,18 +274,20 @@ class LedStrip
 
 class Pixel
 {
-  constructor(red, green, blue)
+  constructor(red, green, blue, white)
   {
     this.red = red;
     this.green = green;
     this.blue = blue;
+    this.white = white ? white : 0;
   }
 
-  SetColor(col1, col2, col3)
+  SetColor(col1, col2, col3, col4)
   {
     this.red = col1;
     this.green = col2;
     this.blue = col3;
+    this.white = col4 ? col4 : 0;
   }
 
   GetColor()
